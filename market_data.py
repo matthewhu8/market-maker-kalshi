@@ -96,12 +96,20 @@ class MarketDataService:
         elif msg_type == "error":
              print(f"WS Error: {data}")
 
+    async def _notify_listeners(self):
+        for listener in self.listeners:
+            if asyncio.iscoroutinefunction(listener):
+                await listener()
+            else:
+                listener()
+
     def _process_snapshot(self, msg):
         # msg keys: yes, no (list of [price, qty])
         # We store them as dicts for easy update: price -> qty
         self.orderbook['yes'] = {item[0]: item[1] for item in msg.get('yes', [])}
         self.orderbook['no'] = {item[0]: item[1] for item in msg.get('no', [])}
         # print("Book snapshot received")
+        asyncio.create_task(self._notify_listeners())
 
     def _process_delta(self, msg):
         # Update YES
@@ -117,6 +125,39 @@ class MarketDataService:
                 self.orderbook['no'].pop(price, None)
             else:
                 self.orderbook['no'][price] = qty
+        
+        asyncio.create_task(self._notify_listeners())
+
+    
+    def get_imbalance(self):
+        # Calculate simple volume imbalance at top levels
+        # VOI = (BidVol - AskVol) / (BidVol + AskVol)
+        # Returns float between -1.0 and 1.0
+        
+        yes_bids = self.orderbook.get('yes', {})
+        no_bids = self.orderbook.get('no', {}) # recall: no bids are effectively yes asks
+        
+        # Get volume at best bid
+        if not yes_bids:
+            bid_vol = 0
+        else:
+            best_bid = max(yes_bids.keys())
+            bid_vol = yes_bids[best_bid]
+            
+        # Get volume at best ask (which is best NO bid)
+        if not no_bids:
+            ask_vol = 0 # No supply
+        else:
+            best_no_bid = max(no_bids.keys())
+            ask_vol = no_bids[best_no_bid]
+            
+        total = bid_vol + ask_vol
+        if total == 0:
+            return 0.0
+            
+        # If bid_vol is high, buying pressure -> positive
+        # If ask_vol is high (lots of NO bids), selling pressure on YES -> negative
+        return (bid_vol - ask_vol) / total
 
     def get_best_prices(self):
         # Returns (best_yes_bid, best_yes_ask)
