@@ -108,5 +108,9 @@ class KalshiClient:
             
         return self.request("POST", "/portfolio/orders", data=data)
 
+    
+    def get_positions(self, limit: int = 100):
+        return self.request("GET", "/portfolio/positions", params={"limit": limit})
+
     def cancel_order(self, order_id: str):
         return self.request("DELETE", f"/portfolio/orders/{order_id}")

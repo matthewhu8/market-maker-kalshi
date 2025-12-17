@@ -1,6 +1,7 @@
 from config import load_config
 from client import KalshiClient
 
+# script to check auth with Kalshi API
 def check():
     try:
         config = load_config()

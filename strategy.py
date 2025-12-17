@@ -4,34 +4,86 @@ from client import KalshiClient
 from market_data import MarketDataService
 
 class MarketMakingStrategy:
+    async def sync_inventory(self):
+        while True:
+            try:
+                data = self.client.get_positions()
+                # data is likely dict with keys 'market_positions' which is a list
+                positions = data.get('market_positions', [])
+                
+                found = False
+                for p in positions:
+                    if p.get('ticker') == self.config.TARGET_TICKER:
+                        # Net position: YES is +, NO is -?
+                        # Or typically Kalshi separates them.
+                        # For simplicity, let's sum 'position' if 'market_position' (or similar field)
+                        # Actually Kalshi likely returns 'position' as signed int relative to YES?
+                        # Or 'side' field.
+                        # Let's assume we just want specific exposures. 
+                        # IF explicit 'yes_count' and 'no_count' exist:
+                        yes = p.get('position', 0) # Simplification
+                        # For now, let's assume 'position' is the net exposure to YES.
+                        self.net_position = yes
+                        found = True
+                        break
+                
+                if not found:
+                    self.net_position = 0
+                    
+                # print(f"Inventory Synced: {self.net_position}")
+            except Exception as e:
+                print(f"Inventory Sync Error: {e}")
+            
+            await asyncio.sleep(10)
+
     def __init__(self, config: Config, client: KalshiClient, market_data: MarketDataService):
         self.config = config
         self.client = client
         self.market_data = market_data
         # Track active orders by side: {'yes': {'price': 10, 'id': '...'}, 'no': {'price': 90, 'id': '...'}}
         self.current_pos = {'yes': None, 'no': None}
+        self.net_position = 0
 
     async def run(self):
-        print("Starting Strategy...")
-        while True:
-            await self.tick()
-            await asyncio.sleep(5) 
+        print("Starting Strategy (Event-Driven)...")
+        self.market_data.add_listener(self.on_market_update)
+        asyncio.create_task(self.sync_inventory())
+        # Keep running until cancelled
+        try:
+            await asyncio.Future()
+        except asyncio.CancelledError:
+            print("Strategy stopping...")
 
-    async def tick(self):
+    async def on_market_update(self):
         best_bid, best_ask = self.market_data.get_best_prices()
         
         if best_bid == 0 and best_ask == 100:
-            print("Empty book, waiting for data...")
+            # print("Empty book, waiting for data...")
             return
 
         print(f"Market: {best_bid} @ {best_ask}")
 
         # 1. Calculate Target Quotes
         mid = (best_bid + best_ask) / 2
+        
+        # Alpha: Order Book Imbalance
+        imbalance = self.market_data.get_imbalance() # -1.0 to 1.0
+        
+        # Risk: Inventory Skew
+        # If we have positive position (Long YES), we want to sell YES -> Lower target price
+        # If we have negative position (Long NO/Short YES), we want to buy YES -> Higher target price
+        # Skew factor: reduce price by X cents per 100 contracts
+        inventory_skew = -(self.net_position / 100.0) * 0.5 
+        
+        # Alpha factor: increase price if buying pressure (positive imbalance)
+        alpha_adj = imbalance * 2.0 # Swing 2 cents based on full imbalance
+        
+        fair_value = mid + alpha_adj + inventory_skew
+        
         spread = self.config.SPREAD_CENTS
         
-        target_bid = int(mid - spread)
-        target_ask = int(mid + spread) # Target Ask for YES
+        target_bid = int(fair_value - spread)
+        target_ask = int(fair_value + spread) # Target Ask for YES
         
         # Competitive Logic
         if best_bid > target_bid:
