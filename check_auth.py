@@ -12,6 +12,8 @@ def check():
         print(f"Balance: {balance}")
     except Exception as e:
         print(f"Auth Failed: {e}")
+        import sys
+        sys.exit(1)
 
 if __name__ == "__main__":
     check()

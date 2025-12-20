@@ -23,3 +23,11 @@ class Config(BaseSettings):
 
 def load_config() -> Config:
     return Config()
+
+class SelectionConfig(BaseSettings):
+    MAX_SPREAD_CENTS: int = Field(default=15, validation_alias="MAX_SPREAD_CENTS")
+    MIN_VOL: int = Field(default=1000, validation_alias="MIN_VOL")
+
+
+# live market games could be a good op to do core market making
+#  biggest flaw is in the market selection aglorithm first
