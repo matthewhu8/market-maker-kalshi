@@ -1,0 +1,41 @@
+name: Kalshi Market Maker Checks
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  auth-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Create Private Key
+        run: |
+          echo "${{ secrets.PRIVATE_KEY }}" > rsa_private_key.txt
+
+      - name: Run Auth Check
+        env:
+          API_KEY: ${{ secrets.API_KEY }}
+          PRIVATE_KEY: rsa_private_key.txt
+          KALSHI_API_URL: "https://api.elections.kalshi.com/trade-api/v2" 
+          
+        run: python check_auth.py
+
+      - name: Run Order Test
+        env:
+          API_KEY: ${{ secrets.API_KEY }}
+          PRIVATE_KEY: rsa_private_key.txt
+          KALSHI_API_URL: "https://api.elections.kalshi.com/trade-api/v2" 
+        run: python test_order.py
