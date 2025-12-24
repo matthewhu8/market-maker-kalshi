@@ -1,4 +1,4 @@
-from config import load_config, SelectionConfig
+from config import load_config
 from client import KalshiClient
 
 def find_best_market(client: KalshiClient):
@@ -37,7 +37,7 @@ def find_best_market(client: KalshiClient):
             
             # 4. Sanity Check on Spread
             # If spread is > 15 cents, it's likely broken/untouchable
-            if spread > SelectionConfig.MAX_SPREAD_CENTS: continue
+            if spread > 10: continue
 
             score = spread 
             
