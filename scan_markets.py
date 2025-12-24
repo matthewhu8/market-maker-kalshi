@@ -16,16 +16,18 @@ def find_best_market(client: KalshiClient):
             vol = m.get('volume', 0)
             
             # 1. Basic Filters
-            if bid <= 0 or ask >= 100: continue # Empty book
+            if bid <= 1 or ask >= 99: continue # Empty book
             if bid >= ask: continue # Inverted or crossed
             
             # 2. Spread Calculation
             spread = ask - bid
             
             # 3. Liquidity Filter (Ensure active market)
-            # Volume: Total contracts traded
-            # Open Interest: Total active contracts
-            # Liquidity: Approx Book depth in cents
+            '''
+            Volume: Total contracts traded
+            Open Interest: Total active contracts
+            Liquidity: Approx Book depth in cents
+            '''
             oi = m.get('open_interest', 0)
             liq = m.get('liquidity', 0)
             
@@ -34,8 +36,8 @@ def find_best_market(client: KalshiClient):
             if vol < 1000 or oi < 3000 or liq < 50000: continue 
             
             # 4. Sanity Check on Spread
-            # If spread is > 40 cents, it's likely broken/untouchable
-            if spread > 40: continue
+            # If spread is > 15 cents, it's likely broken/untouchable
+            if spread > 10: continue
 
             score = spread 
             
